@@ -82,20 +82,7 @@ struct SidebarView: View {
 
             Spacer()
 
-            // ── Swiss footer ─────────────────────────────────────────
-            VStack(spacing: 0) {
-                Divider().padding(.horizontal, 10)
-                VStack(spacing: 2) {
-                    Text("Made in Switzerland 🇨🇭")
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundColor(.secondary.opacity(0.65))
-                    Text("FADP & GDPR Compliant · v1.0")
-                        .font(.system(size: 8, weight: .regular))
-                        .foregroundColor(.secondary.opacity(0.4))
-                }
-                .padding(.vertical, 10)
-                .padding(.horizontal, 14)
-            }
+
         }
         .frame(minWidth: 195, idealWidth: 205)
         .background(Color.purgeSurface(scheme))
