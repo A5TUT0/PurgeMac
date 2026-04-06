@@ -9,6 +9,7 @@ import SwiftUI
 
 @main
 struct PurgeMacApp: App {
+    @State private var appState = AppState()
     @State private var showSplash = true
 
     var body: some Scene {
@@ -16,7 +17,7 @@ struct PurgeMacApp: App {
             ZStack {
                 if showSplash {
                     SplashView {
-                        withAnimation(.easeInOut(duration: 0.45)) {
+                        withAnimation(.easeInOut(duration: 0.4)) {
                             showSplash = false
                         }
                     }
@@ -24,14 +25,16 @@ struct PurgeMacApp: App {
                     .zIndex(10)
                 } else {
                     ContentView()
+                        .environment(appState)
                         .transition(.opacity)
                         .zIndex(0)
                 }
             }
-            .frame(minWidth: 900, minHeight: 600)
+            .frame(minWidth: 950, minHeight: 640)
+            .preferredColorScheme(.dark)
         }
         .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unifiedCompact)
-        .defaultSize(width: 1100, height: 720)
+        .defaultSize(width: 1140, height: 740)
     }
 }

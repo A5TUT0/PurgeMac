@@ -8,29 +8,6 @@
 import Foundation
 import AppKit
 
-// MARK: - Models
-
-struct DevTask: Identifiable {
-    let id = UUID()
-    let title: String
-    let icon: String
-    let description: String
-    let patterns: TaskPatterns
-    var state: TaskState = .idle
-    var result: String?
-
-    enum TaskState { case idle, running, done, failed }
-
-    enum TaskPatterns {
-        /// Matching by directory/file name anywhere in tree
-        case names([String], isDirectory: Bool)
-        /// Matching by exact filename (not directory)
-        case files([String])
-    }
-}
-
-// MARK: - ViewModel
-
 @Observable
 @MainActor
 final class DeveloperViewModel {
@@ -42,6 +19,13 @@ final class DeveloperViewModel {
 
     // MARK: - Folder picker
 
+    func setFolder(_ url: URL) {
+        projectFolder = url
+        tasks = DeveloperViewModel.defaultTasks
+        folderSizeText = ""
+        Task { await analyzeSize() }
+    }
+
     func pickFolder() {
         let panel = NSOpenPanel()
         panel.title = "Choose Project Folder"
@@ -52,10 +36,7 @@ final class DeveloperViewModel {
         panel.canCreateDirectories = false
 
         if panel.runModal() == .OK, let url = panel.url {
-            projectFolder = url
-            tasks = DeveloperViewModel.defaultTasks          // reset states
-            folderSizeText = ""
-            Task { await analyzeSize() }
+            setFolder(url)
         }
     }
 
@@ -97,7 +78,7 @@ final class DeveloperViewModel {
             await MainActor.run {
                 guard let self else { return }
                 if let i = self.tasks.firstIndex(where: { $0.id == taskID }) {
-                    let freed = bytes > 0 ? " · freed \(self.formatBytes(bytes))" : ""
+                    let freed = bytes > 0 ? " · freed \(formatBytes(bytes))" : ""
                     self.tasks[i].result = count == 0
                         ? "Nothing found"
                         : "\(count) item\(count == 1 ? "" : "s") removed\(freed)"
@@ -161,12 +142,6 @@ final class DeveloperViewModel {
             patterns: .names(["*.log"], isDirectory: false)
         ),
         DevTask(
-            title: ".git/objects loose",
-            icon: "arrow.triangle.branch",
-            description: "Run git gc to compress loose objects (requires git CLI)",
-            patterns: .names([], isDirectory: false)    // handled specially via gitGC
-        ),
-        DevTask(
             title: "Coverage reports",
             icon: "chart.bar.doc.horizontal.fill",
             description: "Delete coverage/ and .nyc_output/ folders",
@@ -174,7 +149,7 @@ final class DeveloperViewModel {
         ),
     ]
 
-    // MARK: - Static helpers (nonisolated for background work)
+    // MARK: - Static helpers
 
     nonisolated static func findAndDelete(
         in root: URL,
@@ -189,7 +164,7 @@ final class DeveloperViewModel {
         let enumerator = fm.enumerator(
             at: root,
             includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey],
-            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+            options: [.skipsPackageDescendants]
         )
 
         var toDelete: [URL] = []
@@ -202,7 +177,6 @@ final class DeveloperViewModel {
                 matched = names.contains(name)
                 if matched { enumerator?.skipDescendants() }
             } else {
-                // Support simple glob: *.log
                 matched = names.contains { pattern in
                     if pattern.hasPrefix("*") {
                         return name.hasSuffix(String(pattern.dropFirst()))
@@ -220,7 +194,7 @@ final class DeveloperViewModel {
                 try fm.removeItem(at: url)
                 count += 1
                 totalBytes += bytes
-            } catch { /* skip if can't delete */ }
+            } catch { /* skip */ }
         }
 
         return (count, totalBytes)
@@ -242,12 +216,5 @@ final class DeveloperViewModel {
             total += Int64(size)
         }
         return total
-    }
-
-    nonisolated func formatBytes(_ bytes: Int64) -> String {
-        let formatter = ByteCountFormatter()
-        formatter.countStyle = .file
-        formatter.allowedUnits = [.useKB, .useMB, .useGB]
-        return formatter.string(fromByteCount: bytes)
     }
 }

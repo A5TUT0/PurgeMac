@@ -2,7 +2,7 @@
 //  DuplicatesViewModel.swift
 //  PurgeMac
 //
-//  Scans a user-selected directory for duplicate files using SHA-256 hashing.
+//  Scans for duplicate files using SHA-256 hashing.
 //
 
 import Foundation
@@ -15,7 +15,7 @@ final class DuplicatesViewModel {
     var groups: [DuplicateGroup] = []
     var isScanning = false
     var scanProgress: Double = 0
-    var statusMessage = "Choose a folder to scan."
+    var statusMessage = "Ready to scan."
     var filesScanned = 0
     var scannedDirectory: URL?
 
@@ -24,22 +24,9 @@ final class DuplicatesViewModel {
 
     // MARK: - Public
 
-    func scanHomeDirectory() {
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        scannedDirectory = home
-        startScan(home)
-    }
-
-    func pickDirectory() {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories   = true
-        panel.canChooseFiles         = false
-        panel.allowsMultipleSelection = false
-        panel.message = "Select a folder to scan for duplicates"
-        panel.prompt  = "Scan Folder"
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        scannedDirectory = url
-        startScan(url)
+    func scan(directory: URL) {
+        scannedDirectory = directory
+        startScan(directory)
     }
 
     func rescan() {
@@ -49,19 +36,6 @@ final class DuplicatesViewModel {
 
     func toggleFile(groupIndex: Int, fileIndex: Int) {
         groups[groupIndex].files[fileIndex].isSelected.toggle()
-    }
-
-    func selectAll(in groupIndex: Int) {
-        for i in groups[groupIndex].files.indices {
-            groups[groupIndex].files[i].isSelected = true
-        }
-    }
-
-    func deselectAll(in groupIndex: Int) {
-        // Keep first, deselect rest
-        for i in groups[groupIndex].files.indices where i > 0 {
-            groups[groupIndex].files[i].isSelected = false
-        }
     }
 
     func deleteSelected() {
@@ -108,7 +82,6 @@ final class DuplicatesViewModel {
                 : "Found \(result.groups.count) duplicate group(s) — \(formatBytes(result.groups.reduce(0) { $0 + $1.potentialSavings })) recoverable."
         }
 
-        // Animate progress while scanning
         Task {
             while isScanning {
                 try? await Task.sleep(for: .milliseconds(80))
@@ -117,7 +90,6 @@ final class DuplicatesViewModel {
         }
     }
 
-    // nonisolated so it can run on any thread
     nonisolated static func perform(scanAt directory: URL) -> (groups: [DuplicateGroup], count: Int) {
         let fm = FileManager.default
         var sizeMap: [Int64: [URL]] = [:]
@@ -133,7 +105,7 @@ final class DuplicatesViewModel {
             guard
                 let rv   = try? fileURL.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey]),
                 rv.isRegularFile == true,
-                let size = rv.fileSize, size > 512          // skip tiny files
+                let size = rv.fileSize, size > 512
             else { continue }
             sizeMap[Int64(size), default: []].append(fileURL)
             count += 1
@@ -154,7 +126,6 @@ final class DuplicatesViewModel {
                     f.dateModified = rv2?.contentModificationDate ?? Date()
                     return f
                 }
-                // Sort newest first, auto-select all but the first
                 files.sort { $0.dateModified > $1.dateModified }
                 for i in 1..<files.count { files[i].isSelected = true }
                 resultGroups.append(DuplicateGroup(files: files, fileSize: Int64(size)))

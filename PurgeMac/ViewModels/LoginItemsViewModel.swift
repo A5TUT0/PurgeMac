@@ -2,7 +2,7 @@
 //  LoginItemsViewModel.swift
 //  PurgeMac
 //
-//  Reads login items from LaunchAgents plists and resolves proper app names from their bundles.
+//  Reads login items from LaunchAgents plists.
 //
 
 import Foundation
@@ -69,14 +69,12 @@ final class LoginItemsViewModel {
             }
         }
 
-        // De-duplicate by label
         var seen = Set<String>()
         result = result.filter { seen.insert($0.label).inserted }
 
         return (result, denied)
     }
 
-    /// Walks up the path components to find the enclosing `.app` bundle.
     nonisolated static func findAppBundle(for execPath: String) -> Bundle? {
         guard !execPath.isEmpty else { return nil }
         var url = URL(fileURLWithPath: execPath)
@@ -94,12 +92,10 @@ final class LoginItemsViewModel {
         let label = (dict["Label"] as? String) ?? url.deletingPathExtension().lastPathComponent
         let disabled = (dict["Disabled"] as? Bool) ?? false
 
-        // Resolve executable path
         var execPath = ""
         if let p = dict["Program"] as? String { execPath = p }
         else if let args = dict["ProgramArguments"] as? [String], let first = args.first { execPath = first }
 
-        // Try to resolve display name from the .app bundle
         var displayName = ""
         var bundlePath = ""
 
@@ -110,10 +106,8 @@ final class LoginItemsViewModel {
                 ?? ""
         }
 
-        // Fallback: derive from label  (e.g. "com.apple.notion.helper" → "Notion Helper")
         if displayName.isEmpty {
             let parts = label.components(separatedBy: ".")
-            // Skip common prefixes (com, org, io, net, app, co)
             let skip: Set<String> = ["com", "org", "io", "net", "app", "co", "de", "fr", "uk"]
             let meaningful = parts.drop(while: { skip.contains($0.lowercased()) })
             displayName = meaningful

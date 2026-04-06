@@ -2,7 +2,7 @@
 //  DownloadsViewModel.swift
 //  PurgeMac
 //
-//  Lists and deletes files from the user's Downloads folder.
+//  Lists and deletes files from Downloads folder.
 //
 
 import Foundation
@@ -48,6 +48,23 @@ final class DownloadsViewModel {
         }
     }
 
+    func load(from url: URL) {
+        isLoading = true
+        downloadsURL = url
+        files = []
+
+        Task {
+            let result = await withCheckedContinuation { continuation in
+                DispatchQueue.global(qos: .userInitiated).async {
+                    let r = Self.readFiles(at: url)
+                    continuation.resume(returning: r)
+                }
+            }
+            self.files = result
+            self.isLoading = false
+        }
+    }
+
     func pickFolder() {
         let panel = NSOpenPanel()
         panel.canChooseDirectories   = true
@@ -79,23 +96,6 @@ final class DownloadsViewModel {
     }
 
     // MARK: - Private
-
-    private func load(from url: URL) {
-        isLoading = true
-        downloadsURL = url
-        files = []
-
-        Task {
-            let result = await withCheckedContinuation { continuation in
-                DispatchQueue.global(qos: .userInitiated).async {
-                    let r = Self.readFiles(at: url)
-                    continuation.resume(returning: r)
-                }
-            }
-            self.files = result
-            self.isLoading = false
-        }
-    }
 
     nonisolated static func readFiles(at url: URL) -> [DownloadFile] {
         let fm = FileManager.default
