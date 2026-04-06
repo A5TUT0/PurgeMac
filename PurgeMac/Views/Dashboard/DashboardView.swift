@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+internal import Combine
 
 struct DashboardView: View {
     @Binding var selected: AppSection
@@ -15,6 +16,11 @@ struct DashboardView: View {
     @State private var memoryPressure: Double = 0
     @State private var healthScore: Int = 0
     @State private var healthAnimated: Int = 0
+    @State private var cpuLoad: Double = 0
+    @State private var memoryUsed: Int64 = 0
+    
+    // Auto-refresh timer
+    let timer = Timer.publish(every: 1.5, on: .main, in: .common).autoconnect()
 
     private let features: [(section: AppSection, gradient: LinearGradient, description: String, accent: Color)] = [
         (.duplicates, PMGradients.sunset, "Find and remove duplicate files to free up space", .pmRose),
@@ -44,7 +50,10 @@ struct DashboardView: View {
         .onAppear {
             withAnimation { appeared = true }
             calculateHealth()
-            calculateMemory()
+            refreshSystemStats()
+        }
+        .onReceive(timer) { _ in
+            if appeared { refreshSystemStats() }
         }
     }
 
@@ -171,8 +180,8 @@ struct DashboardView: View {
         let cols = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
         return LazyVGrid(columns: cols, spacing: 12) {
             PMStatCard(value: ProcessInfo.processInfo.operatingSystemVersionString, label: "macOS", icon: "desktopcomputer", gradient: PMGradients.brand)
-            PMStatCard(value: formatBytes(Int64(ProcessInfo.processInfo.physicalMemory)), label: "Memory", icon: "memorychip", gradient: PMGradients.purple)
-            PMStatCard(value: "\(ProcessInfo.processInfo.processorCount) cores", label: "CPU", icon: "cpu", gradient: PMGradients.ocean)
+            PMStatCard(value: formatBytes(memoryUsed), label: "RAM Used", icon: "memorychip", gradient: PMGradients.purple)
+            PMStatCard(value: String(format: "%.1f%%", cpuLoad), label: "CPU Load", icon: "cpu", gradient: PMGradients.ocean)
             PMStatCard(value: formatUptime(), label: "Uptime", icon: "clock", gradient: PMGradients.forest)
         }
         .opacity(appeared ? 1 : 0)
@@ -307,19 +316,65 @@ struct DashboardView: View {
         }
     }
 
-    private func calculateMemory() {
-        let total = ProcessInfo.processInfo.physicalMemory
-        // Estimate used memory via host_statistics
-        var info = mach_task_basic_info()
-        var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size) / 4
-        let _ = withUnsafeMutablePointer(to: &info) {
-            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
-                task_info(mach_task_self_, task_flavor_t(MACH_TASK_BASIC_INFO), $0, &count)
+    private func refreshSystemStats() {
+        let (used, _, pressure) = SystemMonitor.shared.getMemoryUsage()
+        let load = SystemMonitor.shared.getCPUUsage()
+        
+        withAnimation(.easeOut(duration: 0.5)) {
+            memoryUsed = Int64(used)
+            memoryPressure = pressure
+            if load > 0 {
+                cpuLoad = load
             }
         }
-        // Rough estimate: use ProcessInfo memory footprint ratio
-        let usedEstimate = Double(total) * 0.55 // Rough default
-        memoryPressure = (usedEstimate / Double(total)) * 100
+    }
+}
+
+// MARK: - Mach System Monitor
+class SystemMonitor {
+    static let shared = SystemMonitor()
+    private var previousInfo = host_cpu_load_info()
+    
+    private init() { _ = getCPULoad() }
+    
+    func getCPUUsage() -> Double {
+        let cpuLoad = getCPULoad()
+        let userDiff = Double(cpuLoad.cpu_ticks.0 - previousInfo.cpu_ticks.0)
+        let sysDiff  = Double(cpuLoad.cpu_ticks.1 - previousInfo.cpu_ticks.1)
+        let idleDiff = Double(cpuLoad.cpu_ticks.2 - previousInfo.cpu_ticks.2)
+        let niceDiff = Double(cpuLoad.cpu_ticks.3 - previousInfo.cpu_ticks.3)
+        let totalTicks = userDiff + sysDiff + idleDiff + niceDiff
+        let totalUsed = userDiff + sysDiff + niceDiff
+        previousInfo = cpuLoad
+        return totalTicks > 0 ? (totalUsed / totalTicks) * 100.0 : 0.0
+    }
+    
+    private func getCPULoad() -> host_cpu_load_info {
+        var size = mach_msg_type_number_t(MemoryLayout<host_cpu_load_info>.size / MemoryLayout<integer_t>.size)
+        var cpuLoad = host_cpu_load_info()
+        _ = withUnsafeMutablePointer(to: &cpuLoad) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(size)) {
+                host_statistics(mach_host_self(), HOST_CPU_LOAD_INFO, $0, &size)
+            }
+        }
+        return cpuLoad
+    }
+    
+    func getMemoryUsage() -> (used: Double, total: Double, percentage: Double) {
+        let total = ProcessInfo.processInfo.physicalMemory
+        var size = mach_msg_type_number_t(MemoryLayout<vm_statistics64>.size / MemoryLayout<integer_t>.size)
+        var vmStats = vm_statistics64()
+        let result = withUnsafeMutablePointer(to: &vmStats) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(size)) {
+                host_statistics64(mach_host_self(), HOST_VM_INFO64, $0, &size)
+            }
+        }
+        if result == KERN_SUCCESS {
+            let pageSize = Double(vm_page_size)
+            let usedMemory = Double(vmStats.active_count + vmStats.wire_count + vmStats.compressor_page_count) * pageSize
+            return (usedMemory, Double(total), (usedMemory / Double(total)) * 100.0)
+        }
+        return (0, Double(total), 0)
     }
 }
 

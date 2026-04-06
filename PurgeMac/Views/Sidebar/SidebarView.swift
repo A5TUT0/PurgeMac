@@ -9,17 +9,20 @@ import SwiftUI
 
 struct SidebarView: View {
     @Binding var selected: AppSection
+    @Binding var isSidebarOpen: Bool
     @Environment(AppState.self) var appState
 
     var body: some View {
         VStack(spacing: 0) {
             // App header
             appHeader
-                .padding(.horizontal, 16)
-                .padding(.top, 20)
+                .padding(.horizontal, isSidebarOpen ? 16 : 0)
+                .padding(.top, 38)
                 .padding(.bottom, 14)
 
-            PMSeparator()
+            if isSidebarOpen {
+                PMSeparator()
+            }
 
             // Nav items
             ScrollView(showsIndicators: false) {
@@ -30,6 +33,7 @@ struct SidebarView: View {
                             PMSidebarRow(
                                 section: section,
                                 isSelected: selected == section,
+                                isSidebarOpen: isSidebarOpen,
                                 gradient: gradientFor(section)
                             ) {
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -42,13 +46,17 @@ struct SidebarView: View {
                     .padding(.vertical, 10)
 
                     // Utilities label
-                    HStack {
-                        PMSectionLabel(text: "UTILITIES")
-                        Spacer()
+                    if isSidebarOpen {
+                        HStack {
+                            PMSectionLabel(text: "UTILITIES")
+                            Spacer()
+                        }
+                        .padding(.horizontal, 18)
+                        .padding(.top, 12)
+                        .padding(.bottom, 6)
+                    } else {
+                        Spacer().frame(height: 16)
                     }
-                    .padding(.horizontal, 18)
-                    .padding(.top, 12)
-                    .padding(.bottom, 6)
 
                     // Utility sections
                     VStack(spacing: 2) {
@@ -56,6 +64,7 @@ struct SidebarView: View {
                             PMSidebarRow(
                                 section: section,
                                 isSelected: selected == section,
+                                isSidebarOpen: isSidebarOpen,
                                 gradient: gradientFor(section)
                             ) {
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -71,18 +80,21 @@ struct SidebarView: View {
             Spacer()
 
             // Scan path
-            if appState.scanURL != nil {
+            if isSidebarOpen && appState.scanURL != nil {
                 scanPathInfo
                     .padding(.horizontal, 12)
                     .padding(.bottom, 8)
             }
 
-            PMSeparator()
+            if isSidebarOpen {
+                PMSeparator()
+            }
 
             // Settings
             PMSidebarRow(
                 section: .settings,
                 isSelected: selected == .settings,
+                isSidebarOpen: isSidebarOpen,
                 gradient: PMGradients.brand
             ) {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -92,21 +104,39 @@ struct SidebarView: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
 
-            // Version
-            Text("v1.0 • PurgeMac")
-                .font(.system(size: 9, weight: .medium))
-                .foregroundColor(.pmTextDim)
-                .padding(.bottom, 10)
+            // Version and collapse controls
+            if isSidebarOpen {
+                Text("v1.0 • PurgeMac")
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundColor(.pmTextDim)
+                    .padding(.bottom, 10)
+            } else {
+                // Expand button for collapsed mode
+                Button {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        isSidebarOpen.toggle()
+                    }
+                } label: {
+                    Image(systemName: "sidebar.right")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.pmTextSecondary)
+                        .padding(.bottom, 20)
+                }
+                .buttonStyle(.plain)
+            }
         }
-        .frame(width: 230)
+        .frame(width: isSidebarOpen ? 230 : 68)
         .background(
             ZStack {
-                Color(hex: "0A0A11")
+                // Liquid glass background
+                Rectangle()
+                    .fill(.ultraThinMaterial)
+                
                 PMGradients.sidebar.opacity(0.8)
 
                 // Subtle ambient glow from selected section
                 RadialGradient(
-                    colors: [selectedColor.opacity(0.03), .clear],
+                    colors: [selectedColor.opacity(0.04), .clear],
                     center: .center,
                     startRadius: 0,
                     endRadius: 200
@@ -135,35 +165,38 @@ struct SidebarView: View {
 
     private var appHeader: some View {
         HStack(spacing: 10) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(PMGradients.brand)
-                    .frame(width: 34, height: 34)
-                    .shadow(color: Color.pmRed.opacity(0.35), radius: 8)
-                // Inner highlight
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.white.opacity(0.25), Color.clear],
-                            startPoint: .topLeading, endPoint: .center
-                        )
-                    )
-                    .frame(width: 34, height: 34)
-                Image(systemName: "sparkles.square.filled.on.square")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.white)
+            Image("logo")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 34, height: 34)
+                .shadow(color: Color.pmRed.opacity(0.35), radius: 8)
+                
+            if isSidebarOpen {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("PurgeMac")
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
+                    Text("System Cleaner")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(.pmTextMuted)
+                        .tracking(0.5)
+                }
+                Spacer()
+                
+                Button {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        isSidebarOpen.toggle()
+                    }
+                } label: {
+                    Image(systemName: "sidebar.left")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.pmTextSecondary)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
-            VStack(alignment: .leading, spacing: 2) {
-                Text("PurgeMac")
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
-                Text("System Cleaner")
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(.pmTextMuted)
-                    .tracking(0.5)
-            }
-            Spacer()
         }
+        .frame(height: 34) // Keep constant height so it doesn't jump
     }
 
     // MARK: - Scan Path
@@ -227,32 +260,36 @@ struct SidebarView: View {
 struct PMSidebarRow: View {
     let section: AppSection
     let isSelected: Bool
+    let isSidebarOpen: Bool
     let gradient: LinearGradient
     let action: () -> Void
     @State private var hovering = false
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 10) {
+            HStack(spacing: isSidebarOpen ? 10 : 0) {
                 // Active indicator bar
                 RoundedRectangle(cornerRadius: 2, style: .continuous)
                     .fill(isSelected ? AnyShapeStyle(gradient) : AnyShapeStyle(Color.clear))
                     .frame(width: 3, height: 20)
                     .shadow(color: isSelected ? Color.pmRed.opacity(0.5) : .clear, radius: 5)
+                    .padding(.trailing, isSidebarOpen ? 0 : 8) // adjust spacing visually when collapsed
 
                 Image(systemName: section.icon)
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(isSelected ? AnyShapeStyle(gradient) : AnyShapeStyle(Color.pmTextMuted))
                     .frame(width: 22, alignment: .center)
 
-                Text(section.rawValue)
-                    .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
-                    .foregroundColor(isSelected ? .white : .pmTextSecondary)
+                if isSidebarOpen {
+                    Text(section.rawValue)
+                        .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+                        .foregroundColor(isSelected ? .white : .pmTextSecondary)
 
-                Spacer()
+                    Spacer()
+                }
             }
             .padding(.vertical, 8)
-            .padding(.horizontal, 6)
+            .padding(.horizontal, isSidebarOpen ? 6 : 8)
             .background(
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
                     .fill(

@@ -9,6 +9,7 @@ import SwiftUI
 
 struct ContentView: View {
     @State private var selected: AppSection = .dashboard
+    @State private var isSidebarOpen: Bool = true
     @Environment(AppState.self) var appState
 
     var body: some View {
@@ -27,7 +28,7 @@ struct ContentView: View {
 
     private var mainLayout: some View {
         HStack(spacing: 0) {
-            SidebarView(selected: $selected)
+            SidebarView(selected: $selected, isSidebarOpen: $isSidebarOpen)
 
             Rectangle()
                 .fill(
@@ -59,7 +60,11 @@ struct ContentView: View {
                 .animation(.easeInOut(duration: 0.2), value: selected)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // Push dashboard content slightly down if the sidebar is closed
+            // to avoid overlapping with traffic lights
+            .padding(.top, isSidebarOpen ? 0 : 28)
         }
+        .ignoresSafeArea(.all, edges: .top) // Allows sidebar background to sit under traffic lights
     }
 }
 
